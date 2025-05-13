@@ -1,15 +1,71 @@
 import time
+from event_recorder import EventRecorderInterface, Event, JsonLinesEventRecorder
 import imagingcontrol4 as ic4
-from recorder import VideoRecorderInterface, RECORDINGS_DIR
+from recorder import RecordingDataset, VideoRecorderInterface, RECORDINGS_DIR
 import os
 
 
 class ImagingSourceRecorder(VideoRecorderInterface):
+    sink: ic4.Sink
+    grabber: ic4.Grabber
+    video_writer: ic4.VideoWriter
+    video_capture_pause: bool
+    capture_to_video: bool
+    stream_start_time: int  # ns
+    current_recording_frame_index: int
+    event_recorder: EventRecorderInterface
+
+    def __init__(
+        self, event_recorder: EventRecorderInterface = JsonLinesEventRecorder()
+    ):
+        self.capture_to_video = False
+        self.video_capture_pause = False
+        self.video_writer = ic4.VideoWriter(ic4.VideoWriterType.MP4_H264)
+        self.stream_start_time = 0
+        self.current_recording_frame_index = 0
+        self.event_recorder = event_recorder
+
+        class Listener(ic4.QueueSinkListener):
+            def sink_connected(
+                self,
+                sink: ic4.QueueSink,
+                image_type: ic4.ImageType,
+                min_buffers_required: int,
+            ) -> bool:
+                # Allocate more buffers than suggested, because we temporarily take some buffers
+                # out of circulation when saving an image or video files.
+                sink.alloc_and_queue_buffers(min_buffers_required + 2)
+                return True
+
+            def sink_disconnected(self, sink: ic4.QueueSink):
+                pass
+
+            def frames_queued(listener, sink: ic4.QueueSink):
+                buf = sink.pop_output_buffer()
+
+                # Connect the buffer's chunk data to the device's property map
+                # This allows for properties backed by chunk data to be updated
+                self.grabber.device_property_map.connect_chunkdata(buf)
+
+                if self.capture_to_video and not self.video_capture_pause:
+                    try:
+                        self.video_writer.add_frame(buf)
+                        self.current_recording_frame_index += 1
+                    except ic4.IC4Exception as ex:
+                        pass
+
+        self.grabber = ic4.Grabber()
+
+        self.sink = ic4.QueueSink(Listener())
+
     # interface methods
     def get_frame_rate(self) -> float:
         return self.grabber.device_property_map.get_value_float(
             ic4.PropId.ACQUISITION_FRAME_RATE
         )
+
+    def get_current_recording_frame_index(self):
+        return self.current_recording_frame_index
 
     def start_streaming(self, display: ic4.Display | None = None):
         if not self.grabber.is_device_valid:
@@ -39,54 +95,24 @@ class ImagingSourceRecorder(VideoRecorderInterface):
             return ""
         return self.filename
 
-    def __init__(self):
-        self.capture_to_video = False
-        self.video_capture_pause = False
-        self.video_writer = ic4.VideoWriter(ic4.VideoWriterType.MP4_H264)
-        self.stream_start_time = 0
-
-        class Listener(ic4.QueueSinkListener):
-            def sink_connected(
-                self,
-                sink: ic4.QueueSink,
-                image_type: ic4.ImageType,
-                min_buffers_required: int,
-            ) -> bool:
-                # Allocate more buffers than suggested, because we temporarily take some buffers
-                # out of circulation when saving an image or video files.
-                sink.alloc_and_queue_buffers(min_buffers_required + 2)
-                return True
-
-            def sink_disconnected(self, sink: ic4.QueueSink):
-                pass
-
-            def frames_queued(listener, sink: ic4.QueueSink):
-                buf = sink.pop_output_buffer()
-
-                # Connect the buffer's chunk data to the device's property map
-                # This allows for properties backed by chunk data to be updated
-                self.grabber.device_property_map.connect_chunkdata(buf)
-
-                if self.capture_to_video and not self.video_capture_pause:
-                    try:
-                        self.video_writer.add_frame(buf)
-                    except ic4.IC4Exception as ex:
-                        pass
-
-        self.grabber = ic4.Grabber()
-
-        self.sink = ic4.QueueSink(Listener())
-
     def load_state_from_file(self, filename: str):
         self.grabber.device_open_from_state_file(filename)
 
     def start_recording(
-        self, file_name, frame_rate=None, triggered_mode=False, settings=None
+        self,
+        file: RecordingDataset,
+        frame_rate=None,
+        triggered_mode=False,
+        settings=None,
     ):
+
         if not self.grabber.is_device_valid:
             self.capture_to_video = False
             return
 
+        self.event_recorder.begin_file(file.event_filename)
+
+        self.current_recording_frame_index = 0
         try:
             self.enable_triggered_recording_mode(triggered_mode)
 
@@ -99,13 +125,13 @@ class ImagingSourceRecorder(VideoRecorderInterface):
                 )
 
             self.video_writer.begin_file(
-                path=os.path.join(RECORDINGS_DIR, file_name),
+                path=os.path.join(RECORDINGS_DIR, file.video_filename),
                 image_type=self.sink.output_image_type,
                 frame_rate=frame_rate,
             )
             self.capture_to_video = True
 
-            self.filename = file_name
+            self.filename = file
         except ic4.IC4Exception as ex:
             self.capture_to_video = False
             raise ex
@@ -113,6 +139,11 @@ class ImagingSourceRecorder(VideoRecorderInterface):
     def stop_recording(self):
         self.capture_to_video = False
         self.video_writer.finish_file()
+        self.event_recorder.close_file()
+
+    def add_event(self, event):
+        event.frame = self.current_recording_frame_index
+        self.event_recorder.add_event(event)
 
     def stop_streaming(self):
         if not self.grabber.is_device_valid:

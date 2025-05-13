@@ -26,6 +26,13 @@ DEVICE_LOST_EVENT = QEvent.Type(QEvent.Type.User + 2)
 
 
 class MainWindow(QMainWindow):
+
+    device_file: str
+    codec_config_file: str
+    save_pictures_directory: str
+    save_videos_directory: str
+    recorder: ImagingSourceRecorder
+
     def __init__(self):
         QMainWindow.__init__(self)
 
@@ -46,13 +53,10 @@ class MainWindow(QMainWindow):
         self.codec_config_file = appdata_directory + "/codecconfig.json"
 
         self.recorder = ImagingSourceRecorder()
-
         self.recorder.grabber.event_add_device_lost(
             lambda g: QApplication.postEvent(self, QEvent(DEVICE_LOST_EVENT))
         )
-
         self.property_dialog = None
-
         self.createUI()
 
         try:
@@ -433,6 +437,7 @@ def main_gui():
             args=(
                 main_window.recorder.start_recording,
                 main_window.recorder.stop_recording,
+                main_window.recorder.add_event,
             ),
         )
         http_thread.daemon = True
