@@ -1,9 +1,8 @@
 from enum import Enum
 import json
 from fastapi import FastAPI, HTTPException
-from h11 import Event
+from event_recorder import Event
 from pydantic import BaseModel
-from pydantic.dataclasses import dataclass
 from typing import Callable, Dict
 from fastapi.staticfiles import StaticFiles
 from recorder import RECORDINGS_DIR, RecordingDataset, recording_id_from_video_filename
@@ -85,6 +84,14 @@ class AddMetadataRequest(BaseModel):
     metadata: Dict[str, str]
 
 
+class AddEventRequest(BaseModel):
+    event: Event
+
+
+class AddEventResponse(BaseModel):
+    message: str
+
+
 class MetadataResponse(BaseModel):
     message: str
 
@@ -106,6 +113,17 @@ def stop_recording_func() -> None:
 
 def add_event_func(event: Event) -> None:
     return None
+
+
+@app.post("/recordings/event", response_model=AddEventResponse)
+async def add_event(request: AddEventRequest):
+    if not any(
+        recording.status == RecordingStatus.RECORDING
+        for recording in recordings.values()
+    ):
+        raise HTTPException(status_code=400, detail="No recording in progress")
+    add_event_func(request.event)
+    return {"message": "Event added"}
 
 
 # Endpoints

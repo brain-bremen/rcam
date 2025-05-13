@@ -14,6 +14,7 @@ class ImagingSourceRecorder(VideoRecorderInterface):
     stream_start_time: int  # ns
     current_recording_frame_index: int
     event_recorder: EventRecorderInterface
+    dataset: RecordingDataset | None
 
     def __init__(
         self, event_recorder: EventRecorderInterface = JsonLinesEventRecorder()
@@ -24,6 +25,7 @@ class ImagingSourceRecorder(VideoRecorderInterface):
         self.stream_start_time = 0
         self.current_recording_frame_index = 0
         self.event_recorder = event_recorder
+        self.dataset = None
 
         class Listener(ic4.QueueSinkListener):
             def sink_connected(
@@ -93,14 +95,17 @@ class ImagingSourceRecorder(VideoRecorderInterface):
     def get_filename(self) -> str:
         if not self.capture_to_video:
             return ""
-        return self.filename
+        if self.dataset is None or self.dataset.video_filename is None:
+            return ""
+
+        return self.dataset.video_filename
 
     def load_state_from_file(self, filename: str):
         self.grabber.device_open_from_state_file(filename)
 
     def start_recording(
         self,
-        file: RecordingDataset,
+        recording_id: str,
         frame_rate=None,
         triggered_mode=False,
         settings=None,
@@ -110,7 +115,10 @@ class ImagingSourceRecorder(VideoRecorderInterface):
             self.capture_to_video = False
             return
 
-        self.event_recorder.begin_file(file.event_filename)
+        dataset = RecordingDataset(recording_id=recording_id)
+        self.event_recorder.begin_file(
+            os.path.join(dataset.recordings_folder, dataset.event_filename)
+        )
 
         self.current_recording_frame_index = 0
         try:
@@ -125,13 +133,14 @@ class ImagingSourceRecorder(VideoRecorderInterface):
                 )
 
             self.video_writer.begin_file(
-                path=os.path.join(RECORDINGS_DIR, file.video_filename),
+                path=os.path.join(RECORDINGS_DIR, dataset.video_filename),
                 image_type=self.sink.output_image_type,
                 frame_rate=frame_rate,
             )
+
             self.capture_to_video = True
 
-            self.filename = file
+            self.dataset = dataset
         except ic4.IC4Exception as ex:
             self.capture_to_video = False
             raise ex
@@ -171,6 +180,9 @@ class ImagingSourceRecorder(VideoRecorderInterface):
             / (time.perf_counter_ns() - self.stream_start_time)
             * 1e9
         )
+
+    def add_metadata(self, metadata):
+        raise NotImplementedError()
 
     def __del__(self):
         self.grabber.device_close()
