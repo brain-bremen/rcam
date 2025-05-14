@@ -434,6 +434,7 @@ def main_gui():
         recorder = ImagingSourceRecorder(event_recorder=event_recorder)
         main_window = MainWindow(recorder=recorder)
         main_window.show()
+        recorder.register_event_handler(lambda event: print(event))
 
         # Start the HTTP server in a separate thread
         http_thread = Thread(

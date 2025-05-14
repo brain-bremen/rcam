@@ -1,4 +1,5 @@
 import time
+from typing import Callable
 from events import EventRecorderInterface, Event, JsonLinesEventRecorder
 import imagingcontrol4 as ic4
 from recorder import VideoRecordingFileset, VideoRecorderInterface, RECORDINGS_DIR
@@ -15,6 +16,7 @@ class ImagingSourceRecorder(VideoRecorderInterface):
     current_recording_frame_index: int
     event_recorder: EventRecorderInterface
     current_fileset: VideoRecordingFileset | None
+    _event_handlers: list[Callable] = []
 
     def __init__(
         self, event_recorder: EventRecorderInterface = JsonLinesEventRecorder()
@@ -26,6 +28,7 @@ class ImagingSourceRecorder(VideoRecorderInterface):
         self.current_recording_frame_index = 0
         self.event_recorder = event_recorder
         self.current_fileset = None
+        self._event_handlers = []
 
         class _Listener(ic4.QueueSinkListener):
             def sink_connected(
@@ -156,6 +159,8 @@ class ImagingSourceRecorder(VideoRecorderInterface):
     def add_event(self, event):
         event.frame = self.current_recording_frame_index
         self.event_recorder.add_event(event)
+        for handler in self._event_handlers:
+            handler(event)
 
     def stop_streaming(self):
         if not self.grabber.is_device_valid:
@@ -186,6 +191,9 @@ class ImagingSourceRecorder(VideoRecorderInterface):
 
     def add_metadata(self, metadata):
         raise NotImplementedError()
+
+    def register_event_handler(self, func):
+        self._event_handlers.append(func)
 
     def __del__(self):
         self.grabber.device_close()

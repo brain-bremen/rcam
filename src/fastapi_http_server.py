@@ -96,7 +96,7 @@ class AddEventResponse(BaseModel):
     message: str
 
 
-class MetadataResponse(BaseModel):
+class AddMetadataResponse(BaseModel):
     message: str
 
 
@@ -119,7 +119,7 @@ def add_event_func(event: Event) -> None:
     return None
 
 
-@app.post("/recordings/event", response_model=AddEventResponse)
+@app.post("/recordings/current/event", response_model=AddEventResponse)
 async def add_event(request: AddEventRequest):
     if not any(
         recording.status == RecordingStatus.RECORDING
@@ -131,8 +131,8 @@ async def add_event(request: AddEventRequest):
 
 
 # Endpoints
-@app.post("/recordings/start", response_model=Recording)
-async def start_recording(request: StartRecordingRequest):
+@app.post("/recordings", response_model=Recording)
+async def create_new_recording(request: StartRecordingRequest):
     if any(
         recording.status == RecordingStatus.RECORDING
         for recording in recordings.values()
@@ -183,7 +183,7 @@ async def stop_recording(request: StopRecordingRequest):
     }
 
 
-@app.post("/recordings/metadata", response_model=MetadataResponse)
+@app.post("/recordings/current/metadata", response_model=AddMetadataResponse)
 async def add_metadata(request: AddMetadataRequest):
     if request.recording_id not in recordings:
         raise HTTPException(status_code=404, detail="Recording ID not found")
@@ -193,6 +193,11 @@ async def add_metadata(request: AddMetadataRequest):
     ) as metadata_file:
         json.dump(request.metadata, metadata_file)
     return {"message": "Metadata added"}
+
+
+@app.get("/recordings/current", response_model=Recording)
+async def get_current_recording():
+    raise HTTPException(status_code=404, detail="Not implemented yet")
 
 
 @app.get("/recordings/{recording_id}", response_model=Recording)
