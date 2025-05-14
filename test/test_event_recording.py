@@ -2,7 +2,7 @@ import os
 import json
 import tempfile
 import pytest
-from src.event_recorder import JsonLinesEventRecorder, Event
+from events import JsonLinesEventRecorder, Event
 
 
 def test_add_event_writes_json_line(tmp_path):

@@ -1,11 +1,15 @@
 from enum import Enum
 import json
 from fastapi import FastAPI, HTTPException
-from event_recorder import Event
+from events import Event
 from pydantic import BaseModel
 from typing import Callable, Dict
 from fastapi.staticfiles import StaticFiles
-from recorder import RECORDINGS_DIR, RecordingDataset, recording_id_from_video_filename
+from recorder import (
+    RECORDINGS_DIR,
+    VideoRecordingFileset,
+    recording_id_from_video_filename,
+)
 import os
 
 PORT = 8000
@@ -33,7 +37,7 @@ app = FastAPI()
 
 
 class Recording(BaseModel):
-    recording_data: RecordingDataset
+    recording_data: VideoRecordingFileset
     # metadata: Dict[str, str]
     status: RecordingStatus
     video_url: str
@@ -47,7 +51,7 @@ def update_recordings_from_disk(video_extension="mp4") -> Dict[str, Recording]:
     for filename in os.listdir(RECORDINGS_DIR):
         if filename.endswith(f".{video_extension}"):
             recording_id = recording_id_from_video_filename(filename)
-            dataset = RecordingDataset(
+            dataset = VideoRecordingFileset(
                 recording_id=recording_id, video_extension=video_extension
             )
 
@@ -145,7 +149,7 @@ async def start_recording(request: StartRecordingRequest):
     if not request.filename.endswith(".mp4"):
         raise HTTPException(status_code=400, detail="Filename must end with .mp4")
 
-    dataset = RecordingDataset(
+    dataset = VideoRecordingFileset(
         recording_id=recording_id_from_video_filename(request.filename)
     )
     with open(

@@ -5,7 +5,7 @@ from datetime import datetime
 
 # from dataclasses import dataclass
 from pydantic.dataclasses import dataclass
-from event_recorder import Event
+from events import Event
 
 RECORDINGS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "recordings")
 
@@ -25,7 +25,7 @@ def recording_id_from_video_filename(filename: str) -> str:
 
 
 @dataclass
-class RecordingDataset:
+class VideoRecordingFileset:
     """Collection of files representing one video recording"""
 
     recording_id: str  # basename without extension
@@ -60,11 +60,11 @@ class VideoRecorderInterface(ABC):
     @abstractmethod
     def start_recording(
         self,
-        file_name: str | PathLike,
+        recording_id: str | PathLike,
         frame_rate: float | None = None,
         triggered_mode: bool = False,
         settings: RecorderSettings | None = None,
-    ):
+    ) -> VideoRecordingFileset:
         pass
 
     @abstractmethod
@@ -87,6 +87,7 @@ class VideoRecorderInterface(ABC):
     def get_frames_per_second(self) -> float:
         pass
 
+    # online viewing
     @abstractmethod
     def start_streaming(self):
         pass
@@ -99,6 +100,7 @@ class VideoRecorderInterface(ABC):
     def toggle_streaming(self):
         pass
 
+    # state
     @abstractmethod
     def is_streaming(self) -> bool:
         pass
@@ -107,6 +109,7 @@ class VideoRecorderInterface(ABC):
     def is_recording(self) -> bool:
         pass
 
+    #
     @abstractmethod
     def add_event(self, event: Event) -> None:
         pass

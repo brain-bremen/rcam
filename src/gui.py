@@ -1,5 +1,7 @@
 from threading import Lock, Thread
+import events
 from imaging_source_recorder import ImagingSourceRecorder
+import recorder
 from fastapi_http_server import run_http_server
 from PySide6.QtCore import (
     QStandardPaths,
@@ -33,7 +35,7 @@ class MainWindow(QMainWindow):
     save_videos_directory: str
     recorder: ImagingSourceRecorder
 
-    def __init__(self):
+    def __init__(self, recorder: ImagingSourceRecorder):
         QMainWindow.__init__(self)
 
         # Make sure the %appdata%/demoapp directory exists
@@ -52,7 +54,7 @@ class MainWindow(QMainWindow):
         self.device_file = appdata_directory + "/device.json"
         self.codec_config_file = appdata_directory + "/codecconfig.json"
 
-        self.recorder = ImagingSourceRecorder()
+        self.recorder = recorder
         self.recorder.grabber.event_add_device_lost(
             lambda g: QApplication.postEvent(self, QEvent(DEVICE_LOST_EVENT))
         )
@@ -428,7 +430,9 @@ def main_gui():
         app.setApplicationDisplayName("Imaging Source Recorder")
         app.setStyle("fusion")
 
-        main_window = MainWindow()
+        event_recorder = events.JsonLinesEventRecorder()
+        recorder = ImagingSourceRecorder(event_recorder=event_recorder)
+        main_window = MainWindow(recorder=recorder)
         main_window.show()
 
         # Start the HTTP server in a separate thread
