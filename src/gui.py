@@ -1,7 +1,6 @@
 from threading import Lock, Thread
 import events
 from imaging_source_recorder import ImagingSourceRecorder
-import recorder
 from fastapi_http_server import run_http_server
 from PySide6.QtCore import (
     QStandardPaths,

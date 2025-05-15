@@ -25,7 +25,7 @@ def setup_and_teardown():
 
 def test_start_recording():
     response = client.post(
-        "/recordings/start", json={"filename": "test.mp4", "metadata": {"key": "value"}}
+        "/recordings", json={"filename": "test.mp4", "metadata": {"key": "value"}}
     )
     assert response.status_code == 200
     data = response.json()
@@ -36,7 +36,7 @@ def test_start_recording():
 
 def test_stop_recording():
     client.post(
-        "/recordings/start", json={"filename": "test.mp4", "metadata": {"key": "value"}}
+        "/recordings", json={"filename": "test.mp4", "metadata": {"key": "value"}}
     )
     response = client.post("/recordings/stop", json={"recording_id": "test"})
     assert response.status_code == 200
@@ -50,7 +50,7 @@ def test_add_metadata():
         "/recordings/start", json={"filename": "test.mp4", "metadata": {"key": "value"}}
     )
     response = client.post(
-        "/recordings/metadata",
+        "/recordings/current/metadata",
         json={"recording_id": "test", "metadata": {"new_key": "new_value"}},
     )
     assert response.status_code == 200

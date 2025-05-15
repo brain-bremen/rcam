@@ -1,15 +1,15 @@
-from enum import Enum
 import json
 from fastapi import FastAPI, HTTPException
 from events import Event
 from pydantic import BaseModel
 from typing import Callable, Dict
 from fastapi.staticfiles import StaticFiles
-from recorder import (
+from video_recorder_interface import (
     RECORDINGS_DIR,
     VideoRecordingFileset,
     recording_id_from_video_filename,
 )
+import video_recordings_db as db
 import os
 
 PORT = 8000
@@ -24,48 +24,7 @@ def url_from_filename(filename: str | None) -> str | None:
     return f"http://{HOST}:{PORT}/files/{filename}"
 
 
-class RecordingStatus(Enum):
-    STOPPED = "stopped"
-    RECORDING = "recording"
-
-
-# Ensure the recordings directory exists
-if not os.path.exists(RECORDINGS_DIR):
-    os.makedirs(RECORDINGS_DIR)
-
 app = FastAPI()
-
-
-class Recording(BaseModel):
-    recording_data: VideoRecordingFileset
-    # metadata: Dict[str, str]
-    status: RecordingStatus
-    video_url: str
-    metadata_url: str | None = None
-    event_url: str | None = None
-
-
-# Populate recordings with existing mp4 files in the recordings directory
-def update_recordings_from_disk(video_extension="mp4") -> Dict[str, Recording]:
-    recordings: Dict[str, Recording] = {}
-    for filename in os.listdir(RECORDINGS_DIR):
-        if filename.endswith(f".{video_extension}"):
-            recording_id = recording_id_from_video_filename(filename)
-            dataset = VideoRecordingFileset(
-                recording_id=recording_id, video_extension=video_extension
-            )
-
-            recordings[recording_id] = Recording(
-                recording_data=dataset,
-                status=RecordingStatus.STOPPED,
-                video_url=url_from_filename(filename),  # type: ignore
-                metadata_url=url_from_filename(dataset.metadata_filename),
-                event_url=url_from_filename(dataset.event_filename),
-            )
-    return recordings
-
-
-recordings: Dict[str, Recording] = update_recordings_from_disk()
 
 
 # Data models
@@ -122,8 +81,8 @@ def add_event_func(event: Event) -> None:
 @app.post("/recordings/current/event", response_model=AddEventResponse)
 async def add_event(request: AddEventRequest):
     if not any(
-        recording.status == RecordingStatus.RECORDING
-        for recording in recordings.values()
+        recording.status == db.RecordingStatus.RECORDING
+        for recording in db.recordings.values()
     ):
         raise HTTPException(status_code=400, detail="No recording in progress")
     add_event_func(request.event)
@@ -134,8 +93,8 @@ async def add_event(request: AddEventRequest):
 @app.post("/recordings", response_model=Recording)
 async def create_new_recording(request: StartRecordingRequest):
     if any(
-        recording.status == RecordingStatus.RECORDING
-        for recording in recordings.values()
+        recording.status == db.RecordingStatus.RECORDING
+        for recording in db.recordings.values()
     ):
         raise HTTPException(
             status_code=400, detail="A recording is already in progress"

@@ -2,7 +2,11 @@ import time
 from typing import Callable
 from events import EventRecorderInterface, Event, JsonLinesEventRecorder
 import imagingcontrol4 as ic4
-from recorder import VideoRecordingFileset, VideoRecorderInterface, RECORDINGS_DIR
+from video_recorder_interface import (
+    VideoRecordingFileset,
+    VideoRecorderInterface,
+    RECORDINGS_DIR,
+)
 import os
 
 
