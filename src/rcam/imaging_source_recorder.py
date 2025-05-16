@@ -1,8 +1,8 @@
 import time
 from typing import Callable
-from events import EventRecorderInterface, JsonLinesEventRecorder
+from rcam.events import EventRecorderInterface, JsonLinesEventRecorder
 import imagingcontrol4 as ic4
-from video_recorder_interface import (
+from rcam.video_recorder_interface import (
     VideoRecordingFileset,
     VideoRecorderInterface,
 )
@@ -115,7 +115,6 @@ class ImagingSourceRecorder(VideoRecorderInterface):
         triggered_mode=False,
         settings=None,
     ):
-
         if not self.grabber.is_device_valid:
             self.capture_to_video = False
             return
