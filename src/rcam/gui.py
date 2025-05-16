@@ -20,13 +20,13 @@ from PySide6.QtWidgets import (
     QToolBar,
 )
 import imagingcontrol4 as ic4
+from rcam.video_recordings_db import SimpleDiskbasedVideoRecordingsDatabase
 from rcam.resourceselector import ResourceSelector
 
 DEVICE_LOST_EVENT = QEvent.Type(QEvent.Type.User + 2)
 
 
 class MainWindow(QMainWindow):
-
     device_file: str
     codec_config_file: str
     save_pictures_directory: str
@@ -430,6 +430,7 @@ def main_gui():
 
         event_recorder = events.JsonLinesEventRecorder()
         recorder = ImagingSourceRecorder(event_recorder=event_recorder)
+        db = SimpleDiskbasedVideoRecordingsDatabase()
         main_window = MainWindow(recorder=recorder)
         main_window.show()
         recorder.register_event_handler(lambda event: print(event))
@@ -437,11 +438,7 @@ def main_gui():
         # Start the HTTP server in a separate thread
         http_thread = Thread(
             target=run_http_server,
-            args=(
-                main_window.recorder.start_recording,
-                main_window.recorder.stop_recording,
-                main_window.recorder.add_event,
-            ),
+            args=(recorder, db),
         )
         http_thread.daemon = True
         http_thread.start()

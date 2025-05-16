@@ -6,6 +6,7 @@ from rcam.video_recorder_interface import (
     VideoRecordingFileset,
     VideoRecorderInterface,
 )
+from rcam.video_recordings_db import Recording
 
 
 class ImagingSourceRecorder(VideoRecorderInterface):
@@ -70,6 +71,9 @@ class ImagingSourceRecorder(VideoRecorderInterface):
         return self.grabber.device_property_map.get_value_float(
             ic4.PropId.ACQUISITION_FRAME_RATE
         )
+
+    def get_current_recording(self) -> Recording:
+        raise NotImplementedError()
 
     def get_current_recording_frame_index(self):
         return self.current_recording_frame_index
