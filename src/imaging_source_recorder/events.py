@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from io import TextIOWrapper
 import json
 from dataclasses import dataclass
 from typing import IO

@@ -1,10 +1,7 @@
 from dataclasses import dataclass
 import os
-import video_recordings_db as db
-
-VIDEO_FILE_EXTENSION = "mp4"
-METADATA_FILE_EXTENSION: str = "metadata.json"
-EVENT_FILE_EXTENSION: str = "events.jsonl"
+from config import VIDEO_FILE_EXTENSION, METADATA_FILE_EXTENSION, EVENT_FILE_EXTENSION
+import config
 
 
 def recording_id_from_video_filename(filename: str) -> str:
@@ -23,7 +20,7 @@ class VideoRecordingFileset:
 
     @property
     def full_video_filename(self) -> str:
-        return os.path.join(db.RECORDINGS_DIR, self.video_filename)
+        return os.path.join(config.RECORDINGS_DIR, self.video_filename)
 
     @property
     def metadata_filename(self) -> str:
@@ -31,7 +28,7 @@ class VideoRecordingFileset:
 
     @property
     def full_metadata_filename(self) -> str:
-        return os.path.join(db.RECORDINGS_DIR, self.metadata_filename)
+        return os.path.join(config.RECORDINGS_DIR, self.metadata_filename)
 
     @property
     def event_filename(self) -> str:
@@ -39,7 +36,7 @@ class VideoRecordingFileset:
 
     @property
     def full_event_filename(self) -> str:
-        return os.path.join(db.RECORDINGS_DIR, self.event_filename)
+        return os.path.join(config.RECORDINGS_DIR, self.event_filename)
 
     def exists(self) -> bool:
         """Check if all files exists"""
