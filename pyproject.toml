@@ -27,4 +27,4 @@ dev = [
 package = true
 
 [project.scripts]
-rcam = "gui:main_gui"
+rcam = "rcam.gui:main_gui"
