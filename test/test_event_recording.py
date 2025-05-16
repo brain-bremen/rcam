@@ -2,7 +2,7 @@ import os
 import json
 import tempfile
 import pytest
-from events import JsonLinesEventRecorder, Event
+from rcam.events import JsonLinesEventRecorder, Event
 
 
 def test_add_event_writes_json_line(tmp_path):

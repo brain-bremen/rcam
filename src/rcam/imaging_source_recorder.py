@@ -1,13 +1,11 @@
 import time
 from typing import Callable
-from events import EventRecorderInterface, Event, JsonLinesEventRecorder
+from events import EventRecorderInterface, JsonLinesEventRecorder
 import imagingcontrol4 as ic4
 from video_recorder_interface import (
     VideoRecordingFileset,
     VideoRecorderInterface,
-    RECORDINGS_DIR,
 )
-import os
 
 
 class ImagingSourceRecorder(VideoRecorderInterface):
@@ -123,12 +121,7 @@ class ImagingSourceRecorder(VideoRecorderInterface):
             return
 
         self.current_fileset = VideoRecordingFileset(recording_id=recording_id)
-        self.event_recorder.begin_file(
-            os.path.join(
-                self.current_fileset.recordings_folder,
-                self.current_fileset.event_filename,
-            )
-        )
+        self.event_recorder.begin_file(self.current_fileset.full_event_filename)
 
         self.current_recording_frame_index = 0
         try:
@@ -143,22 +136,23 @@ class ImagingSourceRecorder(VideoRecorderInterface):
                 )
 
             self.video_writer.begin_file(
-                path=os.path.join(RECORDINGS_DIR, self.current_fileset.video_filename),
+                path=self.current_fileset.full_video_filename,
                 image_type=self.sink.output_image_type,
                 frame_rate=frame_rate,
             )
 
             self.capture_to_video = True
 
-            self.current_fileset = self.current_fileset
         except ic4.IC4Exception as ex:
             self.capture_to_video = False
+            self.current_fileset = None
             raise ex
 
     def stop_recording(self):
         self.capture_to_video = False
         self.video_writer.finish_file()
         self.event_recorder.close_file()
+        self.current_fileset = None
 
     def add_event(self, event):
         event.frame = self.current_recording_frame_index
@@ -184,7 +178,7 @@ class ImagingSourceRecorder(VideoRecorderInterface):
         self.video_capture_pause = True
 
     def get_number_of_written_frames(self) -> int:
-        return self.grabber.stream_statistics.sink_delivered
+        return self.current_recording_frame_index
 
     def get_frames_per_second(self):
         return (

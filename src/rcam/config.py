@@ -6,7 +6,7 @@ METADATA_FILE_EXTENSION: str = "metadata.json"
 EVENT_FILE_EXTENSION: str = "events.jsonl"
 
 RECORDINGS_DIR = os.path.join(
-    os.path.expanduser("~"), "Videos", "ImagingSourceRecorder"
+    os.path.expanduser("~"), "Videos", "RCam"
 )
 
 if not os.path.exists(RECORDINGS_DIR):

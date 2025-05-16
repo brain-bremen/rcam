@@ -1,7 +1,7 @@
-from threading import Lock, Thread
-import events
-from imaging_source_recorder import ImagingSourceRecorder
-from fastapi_http_server import run_http_server
+from threading import Thread
+import rcam.events as events
+from rcam.imaging_source_recorder import ImagingSourceRecorder
+from rcam.fastapi_http_server import run_http_server
 from PySide6.QtCore import (
     QStandardPaths,
     QDir,
@@ -9,7 +9,6 @@ from PySide6.QtCore import (
     QEvent,
     QFileInfo,
     Qt,
-    QCoreApplication,
 )
 from PySide6.QtGui import QAction, QKeySequence, QCloseEvent
 from PySide6.QtWidgets import (
@@ -21,7 +20,7 @@ from PySide6.QtWidgets import (
     QToolBar,
 )
 import imagingcontrol4 as ic4
-from resourceselector import ResourceSelector
+from rcam.resourceselector import ResourceSelector
 
 DEVICE_LOST_EVENT = QEvent.Type(QEvent.Type.User + 2)
 
@@ -425,8 +424,8 @@ class MainWindow(QMainWindow):
 def main_gui():
     with ic4.Library.init_context():
         app = QApplication()
-        app.setApplicationName("imaging-source-recorder")
-        app.setApplicationDisplayName("Imaging Source Recorder")
+        app.setApplicationName("RCam")
+        app.setApplicationDisplayName("RCam")
         app.setStyle("fusion")
 
         event_recorder = events.JsonLinesEventRecorder()

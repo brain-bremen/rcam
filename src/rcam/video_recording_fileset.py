@@ -1,7 +1,11 @@
 from dataclasses import dataclass
 import os
-from config import VIDEO_FILE_EXTENSION, METADATA_FILE_EXTENSION, EVENT_FILE_EXTENSION
-import config
+from rcam.config import (
+    VIDEO_FILE_EXTENSION,
+    METADATA_FILE_EXTENSION,
+    EVENT_FILE_EXTENSION,
+)
+import rcam.config as config
 
 
 def recording_id_from_video_filename(filename: str) -> str:
@@ -37,17 +41,6 @@ class VideoRecordingFileset:
     @property
     def full_event_filename(self) -> str:
         return os.path.join(config.RECORDINGS_DIR, self.event_filename)
-
-    def exists(self) -> bool:
-        """Check if all files exists"""
-        if not self.all_files_are_present:
-            return False
-
-        return (
-            os.path.exists(self.full_video_filename)
-            and os.path.exists(self.full_metadata_filename)
-            and os.path.exists(self.full_event_filename)
-        )
 
     def __str__(self) -> str:
         return (
