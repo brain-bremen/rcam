@@ -1,5 +1,4 @@
 from rcam.video_recording_fileset import (
-    VideoRecordingFileset,
     recording_id_from_video_filename,
 )
 import rcam.config as config

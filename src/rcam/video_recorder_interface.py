@@ -1,8 +1,6 @@
 from rcam.recording import Recording, RecordingStatus
 from abc import ABC, abstractmethod
-from os import PathLike
 from datetime import datetime
-from rcam.video_recording_fileset import VideoRecordingFileset
 from pydantic.dataclasses import dataclass
 from rcam.events import Event
 from rcam.video_recordings_db import VideoRecordingsDatabase

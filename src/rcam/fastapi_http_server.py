@@ -1,11 +1,10 @@
 from dataclasses import dataclass
 import json
-import re
 from fastapi import FastAPI, HTTPException, Depends, Request
 from rcam.events import Event
 import rcam.config as config
 from pydantic import BaseModel, HttpUrl
-from typing import Callable, Dict
+from typing import Dict
 from fastapi.staticfiles import StaticFiles
 from rcam.video_recorder_interface import MockVideoRecorder, VideoRecorderInterface
 from rcam.video_recording_fileset import (
@@ -154,7 +153,7 @@ async def stop_recording(
 ):
     recorder.stop_recording()
     return {
-        "message": f"Recording stopped",
+        "message": "Recording stopped",
     }
 
 
