@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import json
+import re
 from fastapi import FastAPI, HTTPException, Depends, Request
 from rcam.events import Event
 import rcam.config as config
@@ -22,7 +23,7 @@ def get_recorder(request: Request) -> VideoRecorderInterface:
     return request.app.state.recorder
 
 
-def get_db(request: Request) -> recordings_db.SimpleDiskbasedVideoRecordingsDatabase:
+def get_db(request: Request) -> recordings_db.VideoRecordingsDatabase:
     return request.app.state.db
 
 
@@ -100,7 +101,7 @@ app = FastAPI()
 @app.post("/recordings/current/event", response_model=AddEventResponse)
 async def add_event(
     request: AddEventRequest,
-    db: recordings_db.SimpleDiskbasedVideoRecordingsDatabase = Depends(get_db),
+    db: recordings_db.VideoRecordingsDatabase = Depends(get_db),
     recorder: VideoRecorderInterface = Depends(get_recorder),
 ):
     if db.is_recording_in_progress():
@@ -114,7 +115,7 @@ async def add_event(
 async def create_new_recording(
     request: StartRecordingRequest,
     recorder: VideoRecorderInterface = Depends(get_recorder),
-    db: recordings_db.SimpleDiskbasedVideoRecordingsDatabase = Depends(get_db),
+    db: recordings_db.VideoRecordingsDatabase = Depends(get_db),
 ):
     if db.is_recording_in_progress():
         raise HTTPException(
@@ -138,57 +139,43 @@ async def create_new_recording(
     with open(fileset.full_metadata_filename, "w") as metadata_file:
         json.dump(request.metadata, metadata_file)
 
-    recording = recordings_db.Recording(
-        fileset=fileset,
-        status=recordings_db.RecordingStatus.RECORDING,
-    )
-    db.add_recording(recording=recording)
-    recorder.start_recording(
+    recording = recorder.start_recording(
         recording_id=fileset.recording_id, triggered_mode=request.triggered_mode
     )
+    db.set_current_recording(recording)
 
     return GetRecordingResponse.from_recording(recording)
 
 
 @app.post("/recordings/current/stop", response_model=StopRecordingResponse)
 async def stop_recording(
-    db: recordings_db.SimpleDiskbasedVideoRecordingsDatabase = Depends(get_db),
+    db: recordings_db.VideoRecordingsDatabase = Depends(get_db),
     recorder: VideoRecorderInterface = Depends(get_recorder),
 ):
-    current_recording = recorder.get_current_recording()
-    if current_recording is None:
-        return {
-            "message": "No recording stopped",
-        }
-
     recorder.stop_recording()
-    db.get_recording(
-        current_recording.recording_id
-    ).status = recordings_db.RecordingStatus.STOPPED
-
     return {
-        "message": f"Recording with recording_id={current_recording.recording_id} stopped",
+        "message": f"Recording stopped",
     }
 
 
 @app.post("/recordings/current/metadata", response_model=AddMetadataResponse)
 async def add_metadata(
     request: AddMetadataRequest,
-    db: recordings_db.SimpleDiskbasedVideoRecordingsDatabase = Depends(get_db),
+    db: recordings_db.VideoRecordingsDatabase = Depends(get_db),
     recorder: VideoRecorderInterface = Depends(get_recorder),
 ):
     current_recording = db.get_current_recording()
     if current_recording is None:
         raise HTTPException(status_code=404, detail="No recording in progress")
-    recording = db.recordings[request.recording_id]
-    with open(recording.fileset.full_metadata_filename, "a") as metadata_file:
+
+    with open(current_recording.fileset.full_metadata_filename, "a") as metadata_file:
         json.dump(request.metadata, metadata_file)
     return {"message": "Metadata added"}
 
 
 @app.get("/recordings/current", response_model=GetRecordingResponse)
 async def get_current_recording(
-    db: recordings_db.SimpleDiskbasedVideoRecordingsDatabase = Depends(get_db),
+    db: recordings_db.VideoRecordingsDatabase = Depends(get_db),
 ):
     current_recording = db.get_current_recording()
     if current_recording is None:
@@ -199,7 +186,7 @@ async def get_current_recording(
 @app.get("/recordings/{recording_id}", response_model=GetRecordingResponse)
 async def get_recording(
     recording_id: str,
-    db: recordings_db.SimpleDiskbasedVideoRecordingsDatabase = Depends(get_db),
+    db: recordings_db.VideoRecordingsDatabase = Depends(get_db),
 ):
     recording = db.get_recording(recording_id)
     if recording is None:
@@ -209,12 +196,12 @@ async def get_recording(
 
 @app.get("/recordings", response_model=list[str])
 async def list_completed_recordings(
-    db: recordings_db.SimpleDiskbasedVideoRecordingsDatabase = Depends(get_db),
+    db: recordings_db.VideoRecordingsDatabase = Depends(get_db),
 ):
     available_recordings = []
     # update_recordings_from_disk()
 
-    for recording_id, recording in db.recordings.items():
+    for recording_id, recording in db.items():
         if recording.status == recordings_db.RecordingStatus.STOPPED:
             available_recordings.append(recording.fileset.recording_id)
 
@@ -227,7 +214,7 @@ app.mount("/files", StaticFiles(directory=config.RECORDINGS_DIR), name="files")
 
 def run_http_server(
     recorder: VideoRecorderInterface,
-    db: recordings_db.SimpleDiskbasedVideoRecordingsDatabase,
+    db: recordings_db.VideoRecordingsDatabase,
 ):
     import uvicorn
 
@@ -237,6 +224,6 @@ def run_http_server(
 
 
 if __name__ == "__main__":
-    recorder = MockVideoRecorder()
     db = recordings_db.SimpleDiskbasedVideoRecordingsDatabase()
+    recorder = MockVideoRecorder(db=db)
     run_http_server(recorder=recorder, db=db)

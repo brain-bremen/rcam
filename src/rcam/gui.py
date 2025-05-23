@@ -21,12 +21,12 @@ from PySide6.QtWidgets import (
 )
 import imagingcontrol4 as ic4
 from rcam.resourceselector import ResourceSelector
+from rcam.video_recordings_db import SimpleDiskbasedVideoRecordingsDatabase
 
 DEVICE_LOST_EVENT = QEvent.Type(QEvent.Type.User + 2)
 
 
-class MainWindow(QMainWindow):
-
+class RCamMainWindow(QMainWindow):
     device_file: str
     codec_config_file: str
     save_pictures_directory: str
@@ -353,9 +353,12 @@ class MainWindow(QMainWindow):
         self.start_live_act.setEnabled(self.recorder.grabber.is_device_valid)
         self.start_live_act.setChecked(self.recorder.is_streaming())
         self.record_stop_act.setEnabled(self.recorder.is_recording())
-        self.record_start_act.setEnabled(not self.recorder.capture_to_video)
+        self.record_start_act.setEnabled(not self.recorder.is_recording())
         self.close_device_act.setEnabled(self.recorder.grabber.is_device_open)
-        self.filename_label.setText(self.recorder.get_filename())
+        filename = ""
+        if self.recorder.current_recording is not None:
+            filename = self.recorder.get_current_recording().fileset.video_filename
+        self.filename_label.setText(filename)
 
         self.updateTriggerControl(None)
 
@@ -429,19 +432,19 @@ def main_gui():
         app.setStyle("fusion")
 
         event_recorder = events.JsonLinesEventRecorder()
-        recorder = ImagingSourceRecorder(event_recorder=event_recorder)
-        main_window = MainWindow(recorder=recorder)
+        db = SimpleDiskbasedVideoRecordingsDatabase()
+        recorder = ImagingSourceRecorder(db=db, event_recorder=event_recorder)
+        # recorder = MockVideoRecorder(
+        # db=db,
+        # )
+        main_window = RCamMainWindow(recorder=recorder)
         main_window.show()
         recorder.register_event_handler(lambda event: print(event))
 
         # Start the HTTP server in a separate thread
         http_thread = Thread(
             target=run_http_server,
-            args=(
-                main_window.recorder.start_recording,
-                main_window.recorder.stop_recording,
-                main_window.recorder.add_event,
-            ),
+            args=(recorder, db),
         )
         http_thread.daemon = True
         http_thread.start()

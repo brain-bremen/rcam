@@ -6,15 +6,14 @@ from typing import IO
 
 @dataclass
 class Event:
-    name: str
     code: int
+    name: str
     frame: int
     timestamp: int
     data: dict
 
 
 class EventRecorderInterface(ABC):
-
     @abstractmethod
     def add_event(self, event: Event):
         pass
@@ -29,7 +28,6 @@ class EventRecorderInterface(ABC):
 
 
 class JsonLinesEventRecorder(EventRecorderInterface):
-
     _file: IO | None
 
     def __init__(self, filename: str | None = None):

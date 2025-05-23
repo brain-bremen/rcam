@@ -7,8 +7,8 @@ from rcam.video_recorder_interface import MockVideoRecorder
 import rcam.video_recordings_db as recordings_db
 
 
-app.state.recorder = MockVideoRecorder()
 app.state.db = recordings_db.SimpleDiskbasedVideoRecordingsDatabase()
+app.state.recorder = MockVideoRecorder(app.state.db)
 client = TestClient(app)
 
 
@@ -75,7 +75,7 @@ def test_stop_recording():
     response = client.post("/recordings/current/stop", json={"recording_id": "test"})
     assert response.status_code == 200
     data = response.json()
-    assert data["message"] == "Recording with recording_id=test stopped"
+    assert data["message"] == "Recording stopped"
 
 
 def test_add_metadata():
