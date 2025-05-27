@@ -13,6 +13,7 @@ from rcam.video_recording_fileset import (
 )
 import rcam.video_recordings_db as recordings_db
 import os
+import logging
 
 PORT = 8000
 HOST = "localhost"
@@ -104,7 +105,11 @@ async def add_event(
     recorder: VideoRecorderInterface = Depends(get_recorder),
 ):
     if db.is_recording_in_progress():
+        logging.getLogger().error("No recording in progress")
         raise HTTPException(status_code=400, detail="No recording in progress")
+    logging.getLogger().info(
+        f"Event added via REST API: {request.event.name} at frame {request.event.frame}"
+    )
     recorder.add_event(event=request.event)
     return {"message": "Event added"}
 
@@ -146,7 +151,9 @@ async def create_new_recording(
     recorder.start_recording(
         recording_id=fileset.recording_id, triggered_mode=request.triggered_mode
     )
-
+    logging.getLogger().info(
+        f"Recording started with recording_id={fileset.recording_id}"
+    )
     return GetRecordingResponse.from_recording(recording)
 
 
@@ -165,6 +172,9 @@ async def stop_recording(
     db.get_recording(
         current_recording.recording_id
     ).status = recordings_db.RecordingStatus.STOPPED
+    logging.getLogger().info(
+        f"Recording with recording_id={current_recording.recording_id} stopped"
+    )
 
     return {
         "message": f"Recording with recording_id={current_recording.recording_id} stopped",
@@ -179,10 +189,14 @@ async def add_metadata(
 ):
     current_recording = db.get_current_recording()
     if current_recording is None:
+        logging.getLogger().error("No recording in progress")
         raise HTTPException(status_code=404, detail="No recording in progress")
     recording = db.recordings[request.recording_id]
     with open(recording.fileset.full_metadata_filename, "a") as metadata_file:
         json.dump(request.metadata, metadata_file)
+    logging.getLogger().info(
+        f"Metadata added to recording {request.recording_id}: {request.metadata}"
+    )
     return {"message": "Metadata added"}
 
 
@@ -192,6 +206,7 @@ async def get_current_recording(
 ):
     current_recording = db.get_current_recording()
     if current_recording is None:
+        logging.getLogger().error("No recording in progress")
         raise HTTPException(status_code=404, detail="No recording in progress")
     return GetRecordingResponse.from_recording(current_recording)
 
@@ -203,6 +218,7 @@ async def get_recording(
 ):
     recording = db.get_recording(recording_id)
     if recording is None:
+        logging.getLogger().error(f"Recording with ID {recording_id} not found")
         raise HTTPException(status_code=404, detail="Recording ID not found")
     return GetRecordingResponse.from_recording(recording)
 
@@ -212,8 +228,7 @@ async def list_completed_recordings(
     db: recordings_db.SimpleDiskbasedVideoRecordingsDatabase = Depends(get_db),
 ):
     available_recordings = []
-    # update_recordings_from_disk()
-
+    logging.getLogger().debug("Listing completed recordings")
     for recording_id, recording in db.recordings.items():
         if recording.status == recordings_db.RecordingStatus.STOPPED:
             available_recordings.append(recording.fileset.recording_id)

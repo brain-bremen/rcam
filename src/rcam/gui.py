@@ -9,6 +9,8 @@ from PySide6.QtCore import (
     QEvent,
     QFileInfo,
     Qt,
+    QMetaObject,
+    Q_ARG,
 )
 from PySide6.QtGui import QAction, QKeySequence, QCloseEvent
 from PySide6.QtWidgets import (
@@ -18,13 +20,31 @@ from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
     QToolBar,
+    QDockWidget,
+    QTextEdit,
 )
 import imagingcontrol4 as ic4
 from rcam.video_recorder_interface import VideoRecorderInterface
 from rcam.video_recordings_db import SimpleDiskbasedVideoRecordingsDatabase
 from rcam.resourceselector import ResourceSelector
+import logging
 
 DEVICE_LOST_EVENT = QEvent.Type(QEvent.Type.User + 2)
+
+
+class QTextEditLogger(logging.Handler):
+    """A logging handler that sends log messages to a QTextEdit in the GUI."""
+
+    def __init__(self, text_edit):
+        super().__init__()
+        self.text_edit = text_edit
+
+    def emit(self, record):
+        msg = self.format(record)
+        # Ensure thread-safe append using Qt's signal/slot mechanism
+        QMetaObject.invokeMethod(
+            self.text_edit, "append", Qt.QueuedConnection, Q_ARG(str, msg)
+        )
 
 
 class ImagingSourceRecorderGui(QMainWindow):
@@ -225,6 +245,22 @@ class ImagingSourceRecorderGui(QMainWindow):
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.updateControls)
         self.update_timer.start(1000)  # Update every second
+
+        # --- Add log dock widget ---
+        self.log_dock = QDockWidget("Log", self)
+        self.log_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.RightDockWidgetArea)
+        self.log_text = QTextEdit(self.log_dock)
+        self.log_text.setReadOnly(True)
+        self.log_dock.setWidget(self.log_text)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.log_dock)
+
+        # --- Set up logging to the log window ---
+        self.log_handler = QTextEditLogger(self.log_text)
+        self.log_handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        )
+        logging.getLogger().addHandler(self.log_handler)
+        logging.getLogger().setLevel(logging.INFO)  # Or DEBUG
 
     def onCloseDevice(self):
         if self.recorder.is_streaming():
@@ -440,7 +476,7 @@ def main_gui():
         )
         main_window.show()
         recorder.register_event_handler(lambda event: print(event))
-
+        logging.getLogger().info("Application started")
         # Start the HTTP server in a separate thread
         http_thread = Thread(
             target=run_http_server,
@@ -448,8 +484,19 @@ def main_gui():
         )
         http_thread.daemon = True
         http_thread.start()
+        for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "fastapi"):
+            logging.getLogger(name).handlers = []
+            logging.getLogger(name).propagate = True
+        logging.getLogger().info("HTTP server started")
+
         app.exec()
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        filename="app.log",  # Your log file
+        level=logging.DEBUG,  # Log level
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     main_gui()

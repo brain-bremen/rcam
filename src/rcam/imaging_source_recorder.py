@@ -7,6 +7,9 @@ from rcam.video_recorder_interface import (
     VideoRecorderInterface,
 )
 from rcam.video_recordings_db import Recording
+import logging
+
+logger = logging.getLogger(__name__)  # Uses the global logging configuration
 
 
 class ImagingSourceRecorder(VideoRecorderInterface):
@@ -145,6 +148,9 @@ class ImagingSourceRecorder(VideoRecorderInterface):
             )
 
             self.capture_to_video = True
+            logger.info(
+                f"Started recording to {self.current_fileset.full_video_filename}"
+            )
 
         except ic4.IC4Exception as ex:
             self.capture_to_video = False
@@ -156,12 +162,17 @@ class ImagingSourceRecorder(VideoRecorderInterface):
         self.video_writer.finish_file()
         self.event_recorder.close_file()
         self.current_fileset = None
+        logger.info(
+            f"Stopped recording, written {self.current_recording_frame_index} frames"
+        )
 
     def add_event(self, event):
         event.frame = self.current_recording_frame_index
         self.event_recorder.add_event(event)
+        logging
         for handler in self._event_handlers:
             handler(event)
+        logger.debug(f"Added event: {event}")
 
     def stop_streaming(self):
         if not self.grabber.is_device_valid:
@@ -169,6 +180,8 @@ class ImagingSourceRecorder(VideoRecorderInterface):
 
         if self.grabber.is_streaming:
             self.grabber.stream_stop()
+
+        logger.info("Stopped streaming")
 
     def toggle_streaming(self, display: ic4.Display | None = None):
         if self.grabber.is_device_valid:

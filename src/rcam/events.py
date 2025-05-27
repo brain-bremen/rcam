@@ -3,6 +3,10 @@ import json
 from dataclasses import dataclass
 from typing import IO
 
+logger = __import__("logging").getLogger(
+    __name__
+)  # Uses the global logging configuration
+
 
 @dataclass
 class Event:
@@ -14,7 +18,6 @@ class Event:
 
 
 class EventRecorderInterface(ABC):
-
     @abstractmethod
     def add_event(self, event: Event):
         pass
@@ -29,7 +32,6 @@ class EventRecorderInterface(ABC):
 
 
 class JsonLinesEventRecorder(EventRecorderInterface):
-
     _file: IO | None
 
     def __init__(self, filename: str | None = None):
@@ -40,6 +42,7 @@ class JsonLinesEventRecorder(EventRecorderInterface):
 
     def begin_file(self, filename):
         self._file = open(filename, "a", encoding="utf-8")
+        logger.info(f"Event recording started in file: {filename}")
 
     def close_file(self):
         if not self._file:
@@ -51,7 +54,9 @@ class JsonLinesEventRecorder(EventRecorderInterface):
             return
         self._file.write(json.dumps(event.__dict__) + "\n")
         self._file.flush()
+        logger.debug(f"Event added: {event.name} at frame {event.frame}")
 
     def __del__(self):
         if self._file:
+            logger.info(f"Closing event recorder file {self._file}")
             self._file.close()
