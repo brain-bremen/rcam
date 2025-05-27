@@ -34,7 +34,12 @@ class ImagingSourceRecorderGui(QMainWindow):
     save_videos_directory: str
     recorder: VideoRecorderInterface
 
-    def __init__(self, recorder: VideoRecorderInterface, grabber: ic4.Grabber):
+    def __init__(
+        self,
+        recorder: VideoRecorderInterface,
+        grabber: ic4.Grabber,
+        writer: ic4.VideoWriter,
+    ):
         QMainWindow.__init__(self)
 
         # Make sure the %appdata%/demoapp directory exists
@@ -58,6 +63,7 @@ class ImagingSourceRecorderGui(QMainWindow):
         self.grabber.event_add_device_lost(
             lambda g: QApplication.postEvent(self, QEvent(DEVICE_LOST_EVENT))
         )
+        self.video_writer = writer
         self.property_dialog = None
         self.createUI()
 
@@ -81,7 +87,7 @@ class ImagingSourceRecorderGui(QMainWindow):
 
         if QFileInfo.exists(self.codec_config_file):
             try:
-                self.recorder.video_writer.property_map.deserialize_from_file(
+                self.video_writer.property_map.deserialize_from_file(
                     self.codec_config_file
                 )
             except ic4.IC4Exception as e:
@@ -430,7 +436,7 @@ def main_gui():
         recorder = ImagingSourceRecorder(event_recorder=event_recorder)
         db = SimpleDiskbasedVideoRecordingsDatabase()
         main_window = ImagingSourceRecorderGui(
-            recorder=recorder, grabber=recorder.grabber
+            recorder=recorder, grabber=recorder.grabber, writer=recorder.video_writer
         )
         main_window.show()
         recorder.register_event_handler(lambda event: print(event))
