@@ -159,6 +159,10 @@ async def stop_recording(
     db: recordings_db.VideoRecordingsDatabase = Depends(get_db),
     recorder: VideoRecorderInterface = Depends(get_recorder),
 ):
+    current_recording = recorder.get_current_recording()
+    if current_recording is None:
+        return {"message": "No recording stopped"}
+
     recorder.stop_recording()
     db.get_recording(
         current_recording.recording_id
