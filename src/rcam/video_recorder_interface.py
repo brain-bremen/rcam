@@ -1,9 +1,9 @@
+from rcam.recording import Recording, RecordingStatus
 from abc import ABC, abstractmethod
-from os import PathLike
 from datetime import datetime
-from rcam.video_recording_fileset import VideoRecordingFileset
 from pydantic.dataclasses import dataclass
 from rcam.events import Event
+from rcam.video_recordings_db import VideoRecordingsDatabase
 
 
 @dataclass
@@ -20,15 +20,15 @@ class VideoRecorderInterface(ABC):
     @abstractmethod
     def start_recording(
         self,
-        recording_id: str | PathLike,
+        recording_id: str,
         frame_rate: float | None = None,
         triggered_mode: bool = False,
         settings: RecorderSettings | None = None,
-    ) -> VideoRecordingFileset:
+    ) -> Recording:
         pass
 
     @abstractmethod
-    def get_current_recording(self) -> VideoRecordingFileset | None:
+    def get_current_recording(self) -> Recording | None:
         pass
 
     @abstractmethod
@@ -36,7 +36,7 @@ class VideoRecorderInterface(ABC):
         pass
 
     @abstractmethod
-    def stop_recording(self):
+    def stop_recording(self) -> Recording | None:
         pass
 
     @abstractmethod
@@ -83,34 +83,32 @@ class VideoRecorderInterface(ABC):
 
 # Mock class for video recorder
 class MockVideoRecorder(VideoRecorderInterface):
-    def __init__(self):
+    def __init__(self, db: VideoRecordingsDatabase):
         self.recording = False
         self.streaming = False
-        self.recording_fileset = None
+        self.current_recording: Recording | None = None
         self.current_frame_index = 0
+        self.db = db
 
     def start_recording(
-        self,
-        recording_id: str | PathLike,
-        frame_rate: float | None = None,
-        triggered_mode: bool = False,
-        settings: RecorderSettings | None = None,
-    ) -> VideoRecordingFileset:
+        self, recording_id: str, frame_rate=None, triggered_mode=False, settings=None
+    ) -> Recording:
         self.recording = True
-        self.recording_fileset = VideoRecordingFileset(recording_id=recording_id)
-        return self.recording_fileset
 
-    def get_current_recording(self) -> VideoRecordingFileset | None:
-        if self.recording:
-            return self.recording_fileset
-        return None
+        self.current_recording = Recording(recording_id=recording_id)
+        self.db.set_current_recording(self.current_recording)
+        return self.current_recording
+
+    def get_current_recording(self) -> Recording | None:
+        return self.current_recording
 
     def enable_triggered_recording_mode(self, enable: bool = True):
         pass
 
     def stop_recording(self):
         self.recording = False
-        self.recording_fileset = None
+        self.current_recording.status = RecordingStatus.STOPPED
+        self.current_recording = None
         self.current_frame_index = 0
 
     def get_current_recording_frame_index(self) -> int:

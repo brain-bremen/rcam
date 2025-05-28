@@ -2,8 +2,8 @@ import time
 from typing import Callable
 from rcam.events import EventRecorderInterface, JsonLinesEventRecorder
 import imagingcontrol4 as ic4
+from rcam.video_recordings_db import Recording, RecordingStatus, VideoRecordingsDatabase
 from rcam.video_recorder_interface import (
-    VideoRecordingFileset,
     VideoRecorderInterface,
 )
 from rcam.video_recordings_db import Recording
@@ -21,11 +21,14 @@ class ImagingSourceRecorder(VideoRecorderInterface):
     stream_start_time: int  # ns
     current_recording_frame_index: int
     event_recorder: EventRecorderInterface
-    current_fileset: VideoRecordingFileset | None
+    current_recording: Recording | None
+    db: VideoRecordingsDatabase | None
     _event_handlers: list[Callable] = []
 
     def __init__(
-        self, event_recorder: EventRecorderInterface = JsonLinesEventRecorder()
+        self,
+        db: VideoRecordingsDatabase,
+        event_recorder: EventRecorderInterface = JsonLinesEventRecorder(),
     ):
         self.capture_to_video = False
         self.video_capture_pause = False
@@ -33,8 +36,9 @@ class ImagingSourceRecorder(VideoRecorderInterface):
         self.stream_start_time = 0
         self.current_recording_frame_index = 0
         self.event_recorder = event_recorder
-        self.current_fileset = None
+        self.current_recording = None
         self._event_handlers = []
+        self.db = db
 
         class _Listener(ic4.QueueSinkListener):
             def sink_connected(
@@ -70,13 +74,13 @@ class ImagingSourceRecorder(VideoRecorderInterface):
         self.sink = ic4.QueueSink(_Listener())
 
     # interface methods
-    def get_frame_rate(self) -> float:
+    def get_frame_rate_hz(self) -> float:
         return self.grabber.device_property_map.get_value_float(
             ic4.PropId.ACQUISITION_FRAME_RATE
         )
 
-    def get_current_recording(self) -> Recording:
-        raise NotImplementedError()
+    def get_current_recording(self) -> Recording | None:
+        return self.current_recording
 
     def get_current_recording_frame_index(self):
         return self.current_recording_frame_index
@@ -104,14 +108,6 @@ class ImagingSourceRecorder(VideoRecorderInterface):
     def is_recording(self) -> bool:
         return self.capture_to_video
 
-    def get_filename(self) -> str:
-        if not self.capture_to_video:
-            return ""
-        if self.current_fileset is None or self.current_fileset.video_filename is None:
-            return ""
-
-        return self.current_fileset.video_filename
-
     def load_state_from_file(self, filename: str):
         self.grabber.device_open_from_state_file(filename)
 
@@ -126,8 +122,15 @@ class ImagingSourceRecorder(VideoRecorderInterface):
             self.capture_to_video = False
             return
 
-        self.current_fileset = VideoRecordingFileset(recording_id=recording_id)
-        self.event_recorder.begin_file(self.current_fileset.full_event_filename)
+        self.current_recording = Recording(
+            recording_id=recording_id, status=RecordingStatus.RECORDING
+        )
+        if self.db is not None:
+            self.db.set_current_recording(self.current_recording)
+
+        self.event_recorder.begin_file(
+            self.current_recording.fileset.full_event_filename
+        )
 
         self.current_recording_frame_index = 0
         try:
@@ -142,7 +145,7 @@ class ImagingSourceRecorder(VideoRecorderInterface):
                 )
 
             self.video_writer.begin_file(
-                path=self.current_fileset.full_video_filename,
+                path=self.current_recording.fileset.full_video_filename,
                 image_type=self.sink.output_image_type,
                 frame_rate=frame_rate,
             )
@@ -154,13 +157,20 @@ class ImagingSourceRecorder(VideoRecorderInterface):
 
         except ic4.IC4Exception as ex:
             self.capture_to_video = False
-            self.current_fileset = None
+            self.current_recording = None
             raise ex
 
     def stop_recording(self):
+        if self.current_recording is not None:
+            self.current_recording.status = RecordingStatus.STOPPED
+
+        if self.db:
+            self.db.get_recording(self.current_recording.recording_id)
+
         self.capture_to_video = False
         self.video_writer.finish_file()
         self.event_recorder.close_file()
+        self.current_recording = None
         self.current_fileset = None
         logger.info(
             f"Stopped recording, written {self.current_recording_frame_index} frames"

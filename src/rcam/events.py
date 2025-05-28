@@ -10,8 +10,8 @@ logger = __import__("logging").getLogger(
 
 @dataclass
 class Event:
-    name: str
     code: int
+    name: str
     frame: int
     timestamp: int
     data: dict

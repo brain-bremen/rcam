@@ -412,9 +412,12 @@ class ImagingSourceRecorderGui(QMainWindow):
         self.start_live_act.setEnabled(self.grabber.is_device_valid)
         self.start_live_act.setChecked(self.recorder.is_streaming())
         self.record_stop_act.setEnabled(self.recorder.is_recording())
-        self.record_start_act.setEnabled(not self.recorder.capture_to_video)
+        self.record_start_act.setEnabled(not self.recorder.is_recording())
         self.close_device_act.setEnabled(self.grabber.is_device_open)
-        self.filename_label.setText(self.recorder.get_filename())
+        filename = ""
+        if self.recorder.current_recording is not None:
+            filename = self.recorder.get_current_recording().fileset.video_filename
+        self.filename_label.setText(filename)
 
         self.updateTriggerControl(None)
 
