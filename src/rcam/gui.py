@@ -491,8 +491,8 @@ def main_gui():
         app.setStyle("fusion")
 
         event_recorder = events.JsonLinesEventRecorder()
-        recorder = ImagingSourceRecorder(event_recorder=event_recorder)
         db = SimpleDiskbasedVideoRecordingsDatabase()
+        recorder = ImagingSourceRecorder(event_recorder=event_recorder, db=db)
         main_window = ImagingSourceRecorderGui(
             recorder=recorder, grabber=recorder.grabber, writer=recorder.video_writer
         )
