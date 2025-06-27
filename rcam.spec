@@ -6,7 +6,7 @@ binaries += collect_dynamic_libs('imagingcontrol4')
 
 
 a = Analysis(
-    ['src\\gui.py'],
+    ['src\\rcam\\gui.py'],
     pathex=[],
     binaries=binaries,
     datas=[('.\\images', 'images')],
@@ -25,7 +25,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='imaging-source-recorder',
+    name='RCam',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -46,5 +46,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='imaging-source-recorder',
+    name='RCam',
 )

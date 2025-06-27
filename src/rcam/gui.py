@@ -1,6 +1,7 @@
-from threading import Lock, Thread
-from imaging_source_recorder import ImagingSourceRecorder
-from fastapi_http_server import run_http_server
+from threading import Thread
+import rcam.events as events
+from rcam.imaging_source_recorder import ImagingSourceRecorder
+from rcam.fastapi_http_server import run_http_server
 from PySide6.QtCore import (
     QStandardPaths,
     QDir,
@@ -8,7 +9,8 @@ from PySide6.QtCore import (
     QEvent,
     QFileInfo,
     Qt,
-    QCoreApplication,
+    QMetaObject,
+    Q_ARG,
 )
 from PySide6.QtGui import QAction, QKeySequence, QCloseEvent
 from PySide6.QtWidgets import (
@@ -18,15 +20,69 @@ from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
     QToolBar,
+    QDockWidget,
+    QTextEdit,
 )
 import imagingcontrol4 as ic4
-from resourceselector import ResourceSelector
+from rcam.video_recorder_interface import VideoRecorderInterface
+from rcam.video_recordings_db import SimpleDiskbasedVideoRecordingsDatabase
+from rcam.resourceselector import ResourceSelector
+import logging
 
 DEVICE_LOST_EVENT = QEvent.Type(QEvent.Type.User + 2)
 
 
-class MainWindow(QMainWindow):
-    def __init__(self):
+class QTextEditLogger(logging.Handler):
+    """A logging handler that sends log messages to a QTextEdit in the GUI."""
+
+    def __init__(self, text_edit):
+        super().__init__()
+        self.text_edit = text_edit
+
+    def emit(self, record):
+        msg = self.format(record)
+        # Ensure thread-safe append using Qt's signal/slot mechanism
+        QMetaObject.invokeMethod(
+            self.text_edit, "append", Qt.QueuedConnection, Q_ARG(str, msg)
+        )
+
+
+class LogDockWidget(QDockWidget):
+    """A dockable log window for displaying log messages."""
+
+    def __init__(self, parent=None):
+        super().__init__("Log", parent)
+        self.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.RightDockWidgetArea)
+        self.log_text = QTextEdit(self)
+        self.log_text.setReadOnly(True)
+        self.setWidget(self.log_text)
+
+        # Set up logging to the log window
+        self.log_handler = QTextEditLogger(self.log_text)
+        self.log_handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        )
+        logging.getLogger().addHandler(self.log_handler)
+        # Optionally set the log level here or in your main config
+        # logging.getLogger().setLevel(logging.INFO)
+
+    def clear(self):
+        self.log_text.clear()
+
+
+class ImagingSourceRecorderGui(QMainWindow):
+    device_file: str
+    codec_config_file: str
+    save_pictures_directory: str
+    save_videos_directory: str
+    recorder: VideoRecorderInterface
+
+    def __init__(
+        self,
+        recorder: VideoRecorderInterface,
+        grabber: ic4.Grabber,
+        writer: ic4.VideoWriter,
+    ):
         QMainWindow.__init__(self)
 
         # Make sure the %appdata%/demoapp directory exists
@@ -45,14 +101,13 @@ class MainWindow(QMainWindow):
         self.device_file = appdata_directory + "/device.json"
         self.codec_config_file = appdata_directory + "/codecconfig.json"
 
-        self.recorder = ImagingSourceRecorder()
-
-        self.recorder.grabber.event_add_device_lost(
+        self.recorder = recorder
+        self.grabber = grabber
+        self.grabber.event_add_device_lost(
             lambda g: QApplication.postEvent(self, QEvent(DEVICE_LOST_EVENT))
         )
-
+        self.video_writer = writer
         self.property_dialog = None
-
         self.createUI()
 
         try:
@@ -63,7 +118,7 @@ class MainWindow(QMainWindow):
 
         if QFileInfo.exists(self.device_file):
             try:
-                self.recorder.load_state_from_file(self.device_file)
+                self.grabber.device_open_from_state_file(self.device_file)
                 self.onDeviceOpened()
             except ic4.IC4Exception as e:
                 QMessageBox.information(
@@ -75,7 +130,7 @@ class MainWindow(QMainWindow):
 
         if QFileInfo.exists(self.codec_config_file):
             try:
-                self.recorder.video_writer.property_map.deserialize_from_file(
+                self.video_writer.property_map.deserialize_from_file(
                     self.codec_config_file
                 )
             except ic4.IC4Exception as e:
@@ -214,12 +269,24 @@ class MainWindow(QMainWindow):
         self.update_timer.timeout.connect(self.updateControls)
         self.update_timer.start(1000)  # Update every second
 
+        # --- Add log dock widget ---
+        self.log_dock = LogDockWidget(self)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.log_dock)
+
+        # --- Set up logging to the log window ---
+        # self.log_handler = QTextEditLogger(self.log_text)
+        # self.log_handler.setFormatter(
+        # logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        # )
+        # logging.getLogger().addHandler(self.log_handler)
+        # logging.getLogger().setLevel(logging.INFO)  # Or DEBUG
+
     def onCloseDevice(self):
         if self.recorder.is_streaming():
             self.recorder.stop_streaming()
 
         try:
-            self.recorder.grabber.device_close()
+            self.grabber.device_close()
         except:
             pass
 
@@ -232,26 +299,24 @@ class MainWindow(QMainWindow):
         if self.recorder.is_streaming():
             self.recorder.stop_streaming()
 
-        if self.recorder.grabber.is_device_valid:
-            self.recorder.grabber.device_save_state_to_file(self.device_file)
+        if self.grabber.is_device_valid:
+            self.grabber.device_save_state_to_file(self.device_file)
 
     def customEvent(self, ev: QEvent):
         if ev.type() == DEVICE_LOST_EVENT:
             self.onDeviceLost()
 
     def onSelectDevice(self):
-        dlg = ic4.pyside6.DeviceSelectionDialog(self.recorder.grabber, parent=self)
+        dlg = ic4.pyside6.DeviceSelectionDialog(self.grabber, parent=self)
         if dlg.exec() == 1:
             if not self.property_dialog is None:
-                self.property_dialog.update_grabber(self.recorder.grabber)
-
-            self.onDeviceOpened()
+                self.property_dialog.update_grabber(self.grabber)
         self.updateControls()
 
     def onDeviceProperties(self):
         if self.property_dialog is None:
             self.property_dialog = ic4.pyside6.PropertyDialog(
-                self.recorder.grabber, parent=self, title="Device Properties"
+                self.grabber, parent=self, title="Device Properties"
             )
             # set default vis
 
@@ -259,7 +324,7 @@ class MainWindow(QMainWindow):
 
     def onDeviceDriverProperties(self):
         dlg = ic4.pyside6.PropertyDialog(
-            self.recorder.grabber.driver_property_map,
+            self.grabber,
             parent=self,
             title="Device Driver Properties",
         )
@@ -279,11 +344,11 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "", f"{e}", QMessageBox.StandardButton.Ok)
 
     def onUpdateStatisticsTimer(self):
-        if not self.recorder.grabber.is_device_valid:
+        if not self.grabber.is_device_valid:
             return
 
         try:
-            stats = self.recorder.grabber.stream_statistics
+            stats = self.grabber.stream_statistics
             text = f"Frames Delivered: {stats.sink_delivered} Dropped: {stats.device_transmission_error}/{stats.device_underrun}/{stats.transform_underrun}/{stats.sink_underrun}"
             self.statistics_label.setText(text)
             tooltip = (
@@ -313,7 +378,7 @@ class MainWindow(QMainWindow):
         self.updateControls()
 
     def onDeviceOpened(self):
-        self.device_property_map = self.recorder.grabber.device_property_map
+        self.device_property_map = self.grabber.device_property_map
 
         trigger_mode = self.device_property_map.find(ic4.PropId.TRIGGER_MODE)
         trigger_mode.event_add_notification(self.updateTriggerControl)
@@ -324,7 +389,7 @@ class MainWindow(QMainWindow):
         self.startStopStream()
 
     def updateTriggerControl(self, p: ic4.Property):
-        if not self.recorder.grabber.is_device_valid:
+        if not self.grabber.is_device_valid:
             self.trigger_mode_act.setChecked(False)
             self.trigger_mode_act.setEnabled(False)
         else:
@@ -339,25 +404,26 @@ class MainWindow(QMainWindow):
                 self.trigger_mode_act.setEnabled(False)
 
     def updateControls(self):
-        if not self.recorder.grabber.is_device_open:
+        if not self.grabber.is_device_open:
             self.statistics_label.clear()
 
-        self.device_properties_act.setEnabled(self.recorder.grabber.is_device_valid)
-        self.device_driver_properties_act.setEnabled(
-            self.recorder.grabber.is_device_valid
-        )
-        self.start_live_act.setEnabled(self.recorder.grabber.is_device_valid)
+        self.device_properties_act.setEnabled(self.grabber.is_device_valid)
+        self.device_driver_properties_act.setEnabled(self.grabber.is_device_valid)
+        self.start_live_act.setEnabled(self.grabber.is_device_valid)
         self.start_live_act.setChecked(self.recorder.is_streaming())
         self.record_stop_act.setEnabled(self.recorder.is_recording())
-        self.record_start_act.setEnabled(not self.recorder.capture_to_video)
-        self.close_device_act.setEnabled(self.recorder.grabber.is_device_open)
-        self.filename_label.setText(self.recorder.get_filename())
+        self.record_start_act.setEnabled(not self.recorder.is_recording())
+        self.close_device_act.setEnabled(self.grabber.is_device_open)
+        filename = ""
+        if self.recorder.current_recording is not None:
+            filename = self.recorder.get_current_recording().fileset.video_filename
+        self.filename_label.setText(filename)
 
         self.updateTriggerControl(None)
 
     def updateCameraLabel(self):
         try:
-            info = self.recorder.grabber.device_info
+            info = self.grabber.device_info
             self.camera_label.setText(f"{info.model_name} {info.serial}")
         except ic4.IC4Exception:
             self.camera_label.setText("No Device")
@@ -420,25 +486,39 @@ class MainWindow(QMainWindow):
 def main_gui():
     with ic4.Library.init_context():
         app = QApplication()
-        app.setApplicationName("imaging-source-recorder")
-        app.setApplicationDisplayName("Imaging Source Recorder")
+        app.setApplicationName("RCam")
+        app.setApplicationDisplayName("RCam")
         app.setStyle("fusion")
 
-        main_window = MainWindow()
+        event_recorder = events.JsonLinesEventRecorder()
+        db = SimpleDiskbasedVideoRecordingsDatabase()
+        recorder = ImagingSourceRecorder(event_recorder=event_recorder, db=db)
+        main_window = ImagingSourceRecorderGui(
+            recorder=recorder, grabber=recorder.grabber, writer=recorder.video_writer
+        )
         main_window.show()
-
+        recorder.register_event_handler(lambda event: print(event))
+        logging.getLogger().info("Application started")
         # Start the HTTP server in a separate thread
         http_thread = Thread(
             target=run_http_server,
-            args=(
-                main_window.recorder.start_recording,
-                main_window.recorder.stop_recording,
-            ),
+            args=(recorder, db),
         )
         http_thread.daemon = True
         http_thread.start()
+        for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "fastapi"):
+            logging.getLogger(name).handlers = []
+            logging.getLogger(name).propagate = True
+        logging.getLogger().info("HTTP server started")
+
         app.exec()
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        filename="app.log",  # Your log file
+        level=logging.DEBUG,  # Log level
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     main_gui()

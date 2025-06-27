@@ -1,33 +1,31 @@
-# Imaging Source Recorder
+# RCam - Remote Controllable Camera Recordings from industrial high-speed cameras
 
-A Qt-desktop app for recording from an Imaging Source Camera. Based on the [PySide6 demoapp](https://github.com/TheImagingSource/ic4-examples), licensed with the APACHE license.
+A Qt-desktop app for recording from Imaging Source Cameras that can be controlled remotely
+via a REST interface and can receive events. Based on the [PySide6
+demoapp](https://github.com/TheImagingSource/ic4-examples), licensed with the APACHE
+license.
+
+[![Python Tests](https://github.com/brain-bremen/rcam/actions/workflows/python-tests.yml/badge.svg)](https://github.com/brain-bremen/rcam/actions/workflows/python-tests.yml)
 
 ![Screenshot](images/screenshot.png)
 
-## Design goals
-
-- [x] Provide desktop app to manually start/stop triggered recordings from Imaging Source Cameras
-- [x] Allow starting/stopping of recordings with a given filename via REST API
-- [x] Add metadata to recordings
-- [x] Add retreiving ~~last~~ recorded files via HTTP
-- [ ] Specify metadata schema
 
 ## Execute the GUI with uv
 
 ```
-uvx --from git+https://github.com/brain-bremen/imaging-source-recorder imaging-source-recorder-gui
+uvx --from git+https://github.com/brain-bremen/rcam rcam
 ```
 
 ## Test REST API
 
-While the GUI is running, go to http://localhost:8000/docs to explore the API.
+While the GUI is running, go to http://localhost:8000/docs to explore the REST API.
 
 
 ## Distribute via pyinstaller (for Windows only)
 
 ```
 # create new spec file
-pyinstaller .\src\gui.py  --collect-binaries imagingcontrol4 --add-data ".\images;images" --name "imaging-source-recorder" --contents-directory "." --window --icon .\images\tis.ico
+pyinstaller .\src\rcam\gui.py  --collect-binaries imagingcontrol4 --add-data ".\images;images" --name "rcam" --contents-directory "." --window --icon .\images\tis.ico
 # or use existing
-pyinstaller imaging-source-recorder.spec
+pyinstaller rcam.spec
 ```

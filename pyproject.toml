@@ -1,13 +1,13 @@
 [project]
-name = "imaging-source-recorder"
-version = "0.2.0"
-description = "Desktop app for recording from Imaging Source Cameras"
+name = "RCam"
+version = "0.3.0-dev"
+description = "Desktop application for remote controllable video recordings using industrial high-speed cameras"
 authors = [
       {name = "Joscha Schmiedt", email = "schmiedt@brain.uni-bremen.de"},
 ]
 
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "aiofiles>=24.1.0",
     "fastapi>=0.115.11",
@@ -23,8 +23,12 @@ dev = [
     "pytest>=8.3.5",
 ]
 
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
 [tool.uv]
 package = true
 
 [project.scripts]
-imaging-source-recorder-gui = "gui:main_gui"
+rcam = "rcam.gui:main_gui"
